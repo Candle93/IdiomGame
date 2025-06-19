@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>成語填空遊戲</title>
+    <!-- 載入 Tailwind CSS，用於美化介面 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 React 和 Babel，用於在瀏覽器中直接執行 React 程式碼 -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-slate-100">
+
+    <!-- 遊戲的主容器 -->
+    <div id="app"></div>
+
+    <!-- React 遊戲程式碼 -->
+    <script type="text/babel">
+        // 從全域變數中取得 React 的主要功能
+        const { useState, useEffect, useCallback } = React;
+
+        // =================================================================
+        // ==  您可以在此處新增或修改成語  ==
+        // =================================================================
+        // 規則：請依照 { text: "成語", pinyin: "拼音", definition: "解釋" } 的格式新增
+        const IDIOMS = [
+            { text: "一見如故", pinyin: "yī jiàn rú gù", definition: "初次見面就像老朋友一樣。形容很投緣。" },
+            { text: "眾口鑠金", pinyin: "zhòng kǒu shuò jīn", definition: "眾人的言論能熔化金屬。比喻輿論力量極大，可以混淆是非。" },
+            { text: "水落石出", pinyin: "shuǐ luò shí chū", definition: "水退了，石頭自然露出來。比喻事情的真相大白。" },
+            { text: "自相矛盾", pinyin: "zì xiāng máo dùn", definition: "比喻言行或思想前後抵觸。" },
+            { text: "井底之蛙", pinyin: "jǐng dǐ zhī wā", definition: "比喻見識淺薄的人。" },
+            { text: "愚公移山", pinyin: "yú gōng yí shān", definition: "比喻努力不懈，有志者事竟成。" },
+            { text: "畫蛇添足", pinyin: "huà shé tiān zú", definition: "比喻多此一舉，不但無益，反而有害。" },
+            { text: "杯弓蛇影", pinyin: "bēi gōng shé yǐng", definition: "比喻因疑神疑鬼而引起恐懼。" },
+            { text: "盲人摸象", pinyin: "máng rén mō xiàng", definition: "比喻對事物只有片面的了解，不能做出全面的判斷。" },
+            { text: "車水馬龍", pinyin: "chē shuǐ mǎ lóng", definition: "形容車馬往來不絕的繁華熱鬧景象。" },
+        ];
+        // --- 成語列表結束 ---
+
+        // 資料：用於產生干擾選項的字元池
+        const DISTRACTOR_CHARS = "的一是在不了有和人這中大為上個國我以要他時來用們生道作所可事;"
+
+        // Fisher-Yates Shuffle 演算法，用於打亂選項順序
+        const shuffleArray = (array) => {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex !== 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [
+                    array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        };
+
+        // 主遊戲組件
+        function App() {
+            // 遊戲狀態管理
+            const [currentIdiom, setCurrentIdiom] = useState(null);
+            const [missingIndex, setMissingIndex] = useState(null);
+            const [options, setOptions] = useState([]);
+            const [gameState, setGameState] = useState('playing'); // 'playing', 'correct', 'incorrect'
+            const [score, setScore] = useState(0);
+            const [usedIndices, setUsedIndices] = useState([]);
+            const [selectedOption, setSelectedOption] = useState(null);
+
+            // 選擇一個新成語並設置問題
+            const selectNewIdiom = useCallback(() => {
+                let idiomIndex;
+                const allUsed = usedIndices.length === IDIOMS.length;
+                if (allUsed) {
+                    setUsedIndices([]);
+                }
+
+                do {
+                    idiomIndex = Math.floor(Math.random() * IDIOMS.length);
+                } while (!allUsed && usedIndices.includes(idiomIndex));
+                
+                const newIdiom = IDIOMS[idiomIndex];
+                const newMissingIndex = Math.floor(Math.random() * 4);
+                const correctChar = newIdiom.text[newMissingIndex];
+                
+                const newOptions = new Set([correctChar]);
+                while (newOptions.size < 4) {
+                    const randomChar = DISTRACTOR_CHARS[Math.floor(Math.random() * DISTRACTOR_CHARS.length)];
+                    if (randomChar !== ' ' && randomChar !== ';') {
+                         newOptions.add(randomChar);
+                    }
+                }
+                
+                setUsedIndices(prev => [...prev, idiomIndex]);
+                setCurrentIdiom(newIdiom);
+                setMissingIndex(newMissingIndex);
+                setOptions(shuffleArray(Array.from(newOptions)));
+                setGameState('playing');
+                setSelectedOption(null);
+            }, [usedIndices]);
+
+            // 遊戲初始化
+            useEffect(() => {
+                selectNewIdiom();
+            }, []);
+
+            // 處理玩家選擇
+            const handleOptionClick = (option) => {
+                if (gameState !== 'playing') return;
+
+                setSelectedOption(option);
+                const correctChar = currentIdiom.text[missingIndex];
+                if (option === correctChar) {
+                    setGameState('correct');
+                    setScore(prev => prev + 10);
+                } else {
+                    setGameState('incorrect');
+                    setScore(prev => Math.max(0, prev - 5));
+                }
+            };
+            
+            // 根據遊戲狀態決定按鈕樣式
+            const getButtonClass = (option) => {
+                if (gameState === 'playing') {
+                    return 'bg-white hover:bg-blue-100 border-slate-300';
+                }
+                const correctChar = currentIdiom.text[missingIndex];
+                if (option === correctChar) {
+                    return 'bg-green-200 border-green-400 text-green-800 animate-pulse';
+                }
+                if (option === selectedOption) {
+                    return 'bg-red-200 border-red-400 text-red-800';
+                }
+                return 'bg-slate-100 border-slate-200 text-slate-500';
+            };
+
+            if (!currentIdiom) {
+                return <div className="flex items-center justify-center h-screen bg-gray-100 text-xl">載入中...</div>;
+            }
+
+            return (
+                <div className="font-sans flex items-center justify-center min-h-screen p-4">
+                    <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl p-6 md:p-8 text-center">
+                        <header className="mb-8">
+                            <h1 className="text-3xl md:text-4xl font-bold text-slate-800">成語填空</h1>
+                            <p className="text-slate-500 mt-2">選出正確的字填入空格</p>
+                            <div className="mt-4 text-2xl font-semibold text-blue-600">
+                                分數: {score}
+                            </div>
+                        </header>
+
+                        <main>
+                            <div className="flex justify-center items-center space-x-2 md:space-x-4 mb-10">
+                                {currentIdiom.text.split('').map((char, index) => (
+                                    <div key={index} className="flex items-center justify-center w-16 h-16 md:w-20 md:h-20 text-3xl md:text-4xl font-bold text-slate-800 bg-slate-200 rounded-lg">
+                                        {index === missingIndex ? (
+                                            <div className="w-12 h-12 md:w-16 md:h-16 bg-white rounded-md"></div>
+                                        ) : (
+                                            char
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 mb-8">
+                                {options.map((option, index) => (
+                                    <button
+                                        key={index}
+                                        onClick={() => handleOptionClick(option)}
+                                        disabled={gameState !== 'playing'}
+                                        className={`w-full p-4 text-2xl md:text-3xl font-bold rounded-lg border-2 transition-all duration-300 ${getButtonClass(option)}`}
+                                    >
+                                        {option}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {gameState !== 'playing' && (
+                                <div className="p-4 bg-blue-50 rounded-lg">
+                                    <p className={`text-2xl font-bold mb-2 ${gameState === 'correct' ? 'text-green-600' : 'text-red-600'}`}>
+                                        {gameState === 'correct' ? '答對了！' : '答錯了！'}
+                                    </p>
+                                    <p className="text-lg font-semibold text-slate-800">{currentIdiom.pinyin}</p>
+                                    <p className="text-md text-slate-600 mt-1">{currentIdiom.definition}</p>
+                                    <button
+                                        onClick={selectNewIdiom}
+                                        className="mt-6 w-full bg-slate-800 text-white font-bold py-3 px-4 rounded-lg hover:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-700 transition duration-200 text-lg"
+                                    >
+                                        下一題 →
+                                    </button>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                </div>
+            );
+        }
+
+        // 將遊戲渲染到畫面上
+        const container = document.getElementById('app');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+
+    </script>
+</body>
+</html>
